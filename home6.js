@@ -1080,9 +1080,17 @@
         const pill = $('h-toggle-pill');
         if (pill) pill.classList.toggle('active', hCatEnabled);
 
-        // Inicializar toggle Visto Automático
+        // Inicializar toggle Visto Automático (activo por defecto)
         const awPill = $('cfg-autowatched-pill');
-        if (awPill) awPill.classList.toggle('active', localStorage.getItem('auto_watched') === '1');
+        if (awPill) {
+            const savedAW = localStorage.getItem('auto_watched');
+            if (savedAW === null) {
+                localStorage.setItem('auto_watched', '1');
+                awPill.classList.add('active');
+            } else {
+                awPill.classList.toggle('active', savedAW === '1');
+            }
+        }
 
         // Inicializar selector de idioma preferido — predefinido "Latino" si no hay preferencia
         const langSel = $('preferred-lang-select');
@@ -1932,8 +1940,9 @@
         const autoWatchToggle = document.getElementById('cfg-autowatched-row');
         if (autoWatchToggle) {
             autoWatchToggle.addEventListener('click', () => {
-                const current = localStorage.getItem('auto_watched') || '0';
-                const next = current === '0' ? '1' : '0';
+                const current = localStorage.getItem('auto_watched');
+                // Si es null, asumimos que estaba en '1' (por el default), así que el siguiente es '0'
+                const next = (current === null || current === '1') ? '0' : '1';
                 localStorage.setItem('auto_watched', next);
                 const pill = document.getElementById('cfg-autowatched-pill');
                 if (pill) pill.classList.toggle('active', next === '1');
