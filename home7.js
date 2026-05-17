@@ -694,12 +694,13 @@
             const year = item.date ? item.date.substring(0, 4) : '';
             const bg = layout === 'horizontal' ? backdropBg(item) : posterBg(item);
             const badgeText = isAutoPlay ? 'DESTACADO' : (layout === 'vertical' ? 'EN EMISIÓN' : 'TENDENCIA');
+            const badgeClass = isAutoPlay ? 'badge-featured' : (layout === 'vertical' ? 'badge-airing' : 'badge-trending');
             
             const staggerDelay = index * 0.08;
-            div.innerHTML = `<div class="slider-poster" style="animation: revealIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; animation-delay: ${staggerDelay}s; opacity: 0;">
+            div.innerHTML = `<div class="slider-poster">
                 <div ${getLazyBgAttrs('slider-poster-bg', bg)}></div>
                 <div class="slider-poster-overlay"></div>
-                <div class="slider-poster-badge">${badgeText}</div>
+                <div class="slider-poster-badge ${badgeClass}">${badgeText}</div>
                 ${layout === 'vertical' ? '' : `<span class="slider-poster-eps">${item.episodes} eps</span>`}
                 <div class="slider-poster-info">
                     <div class="slider-poster-title">${item.title}</div>
@@ -803,7 +804,7 @@
 
         track.innerHTML = classics.map((item, i) => `
             <div class="slider-card" data-id="${item.id}">
-                <div class="slider-poster" style="animation: revealIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; animation-delay: ${i * 0.06}s; opacity: 0;">
+                <div class="slider-poster" style="animation: revealIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; animation-delay: ${i * 0.05}s; opacity: 0;">
                     <div ${getLazyBgAttrs('slider-poster-bg', posterBg(item))}></div>
                     <div class="slider-poster-overlay" style="background:linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 60%)"></div>
                     <span class="slider-poster-eps" style="background:var(--accent);color:#000;font-weight:900;border-radius:6px;padding:2px 6px">${item.date ? item.date.substring(0, 4) : 'OLD'}</span>
@@ -817,7 +818,7 @@
 
     function recentCardHTML(item, num, index = 0) {
         const h = isH(item);
-        return `<div class="recent-card${h ? ' recent-card-h' : ''}" data-id="${item.id}" style="animation: revealIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; animation-delay: ${index * 0.06}s; opacity: 0;">
+        return `<div class="recent-card${h ? ' recent-card-h' : ''}" data-id="${item.id}" style="animation: revealIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; animation-delay: ${index * 0.05}s; opacity: 0;">
     <div class="recent-poster">
       <div ${getLazyBgAttrs('recent-poster-img', posterBg(item))}></div>
       <div class="recent-poster-num">#${num}</div>
@@ -878,7 +879,7 @@
         }
         // Cap stagger delay at 15 items for better performance
         const delay = Math.min(index, 15) * 0.04;
-        return `<div class="scard${h ? ' scard-h' : ''}" data-id="${item.id}" style="animation: revealIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; animation-delay: ${delay}s; opacity: 0;">
+        return `<div class="scard${h ? ' scard-h' : ''}" data-id="${item.id}">
     <div ${bgAttrs}>
       <div class="scard-status ${getStatusClass(item.status)}">${item.status}</div>
       ${h ? '<span class="h-badge">18+</span>' : ''}
@@ -895,29 +896,36 @@
     }
 
     function renderSearch(q = '', cat = null) {
-        const lower = q.toLowerCase();
+        const grid = $('search-grid');
+        const empty = $('search-empty');
+        const meta = $('search-meta');
+
+        const trimmedQ = q.trim();
+        const lower = trimmedQ.toLowerCase();
         let results = visibleDATA();
-        if (q) results = results.filter(d =>
-            d.title.toLowerCase().includes(lower) ||
-            d.description.toLowerCase().includes(lower) ||
-            d.tags.some(t => t.toLowerCase().includes(lower)) ||
-            d.category.toLowerCase().includes(lower)
-        );
+        
+        if (trimmedQ) {
+            results = results.filter(d =>
+                d.title.toLowerCase().includes(lower) ||
+                d.description.toLowerCase().includes(lower) ||
+                d.tags.some(t => t.toLowerCase().includes(lower)) ||
+                d.category.toLowerCase().includes(lower)
+            );
+        }
+
         if (cat) results = results.filter(d => {
             const cats = d.category ? d.category.split(/,\s*/).map(c => c.trim()) : [];
             return cats.includes(cat);
         });
-        const grid = $('search-grid');
-        const empty = $('search-empty');
-        const meta = $('search-meta');
+
         if (!results.length) {
             grid.innerHTML = '';
             empty.style.display = 'flex';
             meta.textContent = '';
         } else {
             empty.style.display = 'none';
-            renderInChunks(results, grid, (d, i) => searchCardHTML(d, i, false, !!q));
-            meta.textContent = `${results.length} resultado${results.length !== 1 ? 's' : ''}${q ? ' para "' + q + '"' : ''}`;
+            renderInChunks(results, grid, (d, i) => searchCardHTML(d, i, false, !!trimmedQ));
+            meta.textContent = `${results.length} resultado${results.length !== 1 ? 's' : ''}${trimmedQ ? ' para "' + trimmedQ + '"' : ''}`;
         }
     }
 
@@ -949,12 +957,11 @@
             const icon = cfg.icon || '';
             const accent = cfg.accent || 'var(--accent)';
             const staggerDelay = Math.min(index, 15) * 0.04;
-            const animations = `revealIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards, shimmer 1.5s infinite linear`;
 
             return `
-                <div class="cat-card" data-cat="${cat}" style="animation: ${animations}; animation-delay: ${staggerDelay}s, 0s; opacity: 0;">
+                <div class="cat-card" data-cat="${cat}" style="animation: revealIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; animation-delay: ${staggerDelay}s; opacity: 0;">
                     <img class="cat-card-bg" src="${cfg.backdrop || ''}" alt="" loading="lazy" style="display: ${cfg.backdrop ? 'block' : 'none'};">
-                    <div class="cat-card-icon" style="color:${accent}; border-color:${accent}44; background: ${accent}11; backdrop-filter: blur(10px);">${icon}</div>
+                    <div class="cat-card-icon" style="color:${accent}; border-color:${accent}44; background: ${accent}11;">${icon}</div>
                     <div class="cat-card-info">
                         <h3>${cat}</h3>
                         <div class="cat-card-count" style="background:${accent}22; color:${accent}">${count} serie${count !== 1 ? 's' : ''}</div>
@@ -1009,7 +1016,7 @@
         const ws = getWatchStatus(item.id);
         const fav = isFav(item.id);
         const h = isH(item);
-        return `<div class="scard${h ? ' scard-h' : ''}" data-id="${item.id}" style="animation: revealIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; animation-delay: ${index * 0.04}s; opacity: 0;">
+        return `<div class="scard${h ? ' scard-h' : ''}" data-id="${item.id}">
     <div class="scard-poster lazy-bg" data-bg="${posterBg(item)}">
       <div class="scard-status ${getStatusClass(item.status)}">${item.status}</div>
       ${h ? '<span class="h-badge">18+</span>' : ''}
