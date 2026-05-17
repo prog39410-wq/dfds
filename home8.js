@@ -94,6 +94,7 @@
     let watchStatus = JSON.parse(localStorage.getItem(WATCH_STATUS_KEY) || '{}');
     const APP_STATE_KEY = 'wolfanime_last_state';
     let state = { view: null, prev: null, detail: null, catFilter: null, searchQ: '', favFilter: 'all' };
+    let viewScrolls = {};
 
     // Hybrid Lazy Load Persisted URL Cache
     window.loadedImageCache = new Set();
@@ -345,7 +346,10 @@
     // ────────────────────────────────────────────────────────────
 
     const $ = id => document.getElementById(id);
-    const saveFavs = () => localStorage.setItem(FAVS_KEY, JSON.stringify(favs));
+    const saveFavs = () => {
+        localStorage.setItem(FAVS_KEY, JSON.stringify(favs));
+        renderProfile();
+    };
     const isFav = id => favs.includes(id);
 
 
@@ -409,7 +413,15 @@
                 if (data.settings.aw !== undefined) localStorage.setItem('auto_watched', data.settings.aw ? '1' : '0');
             }
             showToast('Restauración completada');
-            setTimeout(() => location.reload(), 1500);
+            closeModal('restore-text-overlay');
+            
+            // Refrescar UI dinámicamente
+            renderHomeFavs();
+            renderFavorites();
+            renderProfile();
+            renderCategories();
+            if (state.view === 'all-library') renderAllLibrary();
+            if (state.view === 'search') renderSearch($('search-input').value, state.catFilter);
         } catch (e) {
             showToast('Código de respaldo inválido', '<span style="color:#ff4d6d">!</span>');
         }
@@ -879,7 +891,7 @@
         }
         // Cap stagger delay at 15 items for better performance
         const delay = Math.min(index, 15) * 0.04;
-        return `<div class="scard${h ? ' scard-h' : ''}" data-id="${item.id}">
+        return `<div class="scard${h ? ' scard-h' : ''}" data-id="${item.id}" style="animation: revealIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; animation-delay: ${index * 0.04}s; opacity: 0;">
     <div ${bgAttrs}>
       <div class="scard-status ${getStatusClass(item.status)}">${item.status}</div>
       ${h ? '<span class="h-badge">18+</span>' : ''}
@@ -913,7 +925,7 @@
             );
         }
 
-        if (cat) results = results.filter(d => {
+        if (cat && trimmedQ) results = results.filter(d => {
             const cats = d.category ? d.category.split(/,\s*/).map(c => c.trim()) : [];
             return cats.includes(cat);
         });
@@ -964,7 +976,7 @@
                     <div class="cat-card-icon" style="color:${accent}; border-color:${accent}44; background: ${accent}11;">${icon}</div>
                     <div class="cat-card-info">
                         <h3>${cat}</h3>
-                        <div class="cat-card-count" style="background:${accent}22; color:${accent}">${count} serie${count !== 1 ? 's' : ''}</div>
+                        <div class="cat-card-count" style="background:${accent}; color:#000">${count} anime${count !== 1 ? 's' : ''}</div>
                     </div>
                 </div>
             `;
@@ -1016,7 +1028,7 @@
         const ws = getWatchStatus(item.id);
         const fav = isFav(item.id);
         const h = isH(item);
-        return `<div class="scard${h ? ' scard-h' : ''}" data-id="${item.id}">
+        return `<div class="scard${h ? ' scard-h' : ''}" data-id="${item.id}" style="animation: revealIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; animation-delay: ${index * 0.04}s; opacity: 0;">
     <div class="scard-poster lazy-bg" data-bg="${posterBg(item)}">
       <div class="scard-status ${getStatusClass(item.status)}">${item.status}</div>
       ${h ? '<span class="h-badge">18+</span>' : ''}
@@ -1079,7 +1091,7 @@
         const stats = $('profile-stats');
         if (stats) {
             stats.innerHTML = `
-                <div class="stat-item"><div class="stat-num">${visibleDATA().length}</div><div class="stat-label">Series</div></div>
+                <div class="stat-item"><div class="stat-num">${visibleDATA().length}</div><div class="stat-label">Animes</div></div>
                 <div class="stat-item"><div class="stat-num">${favCount}</div><div class="stat-label">Favoritos</div></div>
                 <div class="stat-item"><div class="stat-num">${visibleCategories.length}</div><div class="stat-label">Géneros</div></div>
             `;
@@ -1379,10 +1391,20 @@
             setTimeout(() => { current.classList.remove('slide-left'); }, 350);
         }
 
+        if (state.view) {
+            const oldView = document.getElementById(`view-${state.view}`);
+            if (oldView) viewScrolls[state.view] = oldView.scrollTop;
+        }
+
         state.prev = state.view;
         state.view = view;
         next.classList.add('active');
-        next.scrollTop = 0;
+        
+        if (viewScrolls[view] !== undefined) {
+            next.scrollTop = viewScrolls[view];
+        } else {
+            next.scrollTop = 0;
+        }
 
         document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.nav === view || (view === 'cat-library' && b.dataset.nav === 'categories') || (view === 'all-library' && b.dataset.nav === 'home')));
 
