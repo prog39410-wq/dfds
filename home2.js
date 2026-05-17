@@ -95,6 +95,38 @@
     const APP_STATE_KEY = 'wolfanime_last_state';
     let state = { view: null, prev: null, detail: null, catFilter: null, searchQ: '', favFilter: 'all' };
 
+    // Hybrid Lazy Load Persisted URL Cache
+    window.loadedImageCache = new Set();
+    try {
+        const stored = JSON.parse(localStorage.getItem('wolfanime_img_cache_v1') || '[]');
+        window.loadedImageCache = new Set(stored);
+    } catch(e) {}
+
+    function saveImageCache(url) {
+        if (!url || url === 'undefined' || url.includes('var(--')) return;
+        if (!window.loadedImageCache.has(url)) {
+            window.loadedImageCache.add(url);
+            try {
+                let arr = [...window.loadedImageCache];
+                if (arr.length > 300) {
+                    arr = arr.slice(arr.length - 300);
+                    window.loadedImageCache = new Set(arr);
+                }
+                localStorage.setItem('wolfanime_img_cache_v1', JSON.stringify(arr));
+            } catch(e) {}
+        }
+    }
+
+    function getLazyBgAttrs(classes, bgStr) {
+        let match = (bgStr || '').match(/url\(['"]?([^'"\)]+)['"]?\)/);
+        let key = match ? match[1] : bgStr;
+        if (key && key !== 'undefined' && window.loadedImageCache.has(key)) {
+            // Evitar conflictos con animaciones shimmer eliminándolas al vuelo
+            return `class="${classes} loaded" style="background: ${bgStr} !important; animation: none !important;"`;
+        }
+        return `class="${classes} lazy-bg" data-bg="${bgStr}"`;
+    }
+
     // --- Lazy Loading Hybrid System ---
     function forceLoadImage(el) {
         if (el.dataset.loading === '1') return;
@@ -122,6 +154,7 @@
                 }
                 
                 el.classList.add('loaded');
+                if (match && match[1]) saveImageCache(match[1]);
             };
             img.onload = applyBg;
             img.onerror = applyBg;
@@ -590,7 +623,7 @@
         const h = isH(item);
         if (mini) {
             return `<div class="mini-card${h ? ' scard-h' : ''}" data-id="${item.id}">
-      <div class="mini-card-img lazy-bg" data-bg="${posterBg(item)}"></div>
+      <div ${getLazyBgAttrs('mini-card-img', posterBg(item))}></div>
       <div class="mini-card-body">
         <div class="mini-card-title">${item.title}</div>
         <div style="font-size:11px;color:var(--text3)">${item.episodes} eps</div>
@@ -598,7 +631,7 @@
     </div>`;
         }
         return `<div class="card${h ? ' card-h' : ''}" data-id="${item.id}">
-    <div class="card-img lazy-bg" data-bg="${posterBg(item)}">
+    <div ${getLazyBgAttrs('card-img', posterBg(item))}>
       <div style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.6);border-radius:20px;padding:3px 8px;font-size:11px;font-weight:600;color:#fff">${item.status}</div>
       ${item.addedDate ? `<div style="position:absolute;bottom:8px;left:8px;background:rgba(0,230,118,0.18);border:1px solid rgba(0,230,118,0.35);border-radius:20px;padding:3px 8px;font-size:10px;font-weight:600;color:#00E676">+ ${formatAdded(item.addedDate)}</div>` : ''}
       ${h ? '<span class="h-badge">18+</span>' : ''}
@@ -661,7 +694,7 @@
             
             const staggerDelay = index * 0.08;
             div.innerHTML = `<div class="slider-poster" style="animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; animation-delay: ${staggerDelay}s; opacity: 0;">
-                <div class="slider-poster-bg lazy-bg" data-bg="${bg}"></div>
+                <div ${getLazyBgAttrs('slider-poster-bg', bg)}></div>
                 <div class="slider-poster-overlay"></div>
                 <div class="slider-poster-badge">${badgeText}</div>
                 ${layout === 'vertical' ? '' : `<span class="slider-poster-eps">${item.episodes} eps</span>`}
@@ -768,7 +801,7 @@
         track.innerHTML = classics.map((item, i) => `
             <div class="slider-card" data-id="${item.id}">
                 <div class="slider-poster" style="animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; animation-delay: ${i * 0.08}s; opacity: 0;">
-                    <div class="slider-poster-bg lazy-bg" data-bg="${posterBg(item)}"></div>
+                    <div ${getLazyBgAttrs('slider-poster-bg', posterBg(item))}></div>
                     <div class="slider-poster-overlay" style="background:linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 60%)"></div>
                     <span class="slider-poster-eps" style="background:var(--accent);color:#000;font-weight:900;border-radius:6px;padding:2px 6px">${item.date ? item.date.substring(0, 4) : 'OLD'}</span>
                     <div class="slider-poster-info" style="padding:10px">
@@ -783,7 +816,7 @@
         const h = isH(item);
         return `<div class="recent-card${h ? ' recent-card-h' : ''}" data-id="${item.id}" style="animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; animation-delay: ${index * 0.08}s; opacity: 0;">
     <div class="recent-poster">
-      <div class="recent-poster-img lazy-bg" data-bg="${posterBg(item)}"></div>
+      <div ${getLazyBgAttrs('recent-poster-img', posterBg(item))}></div>
       <div class="recent-poster-num">#${num}</div>
       ${h ? '<span class="h-badge">18+</span>' : ''}
     </div>
@@ -813,10 +846,16 @@
 
 
 
-    function searchCardHTML(item, purple = false, index = 0) {
+    function searchCardHTML(item, purple = false, index = 0, eager = false) {
         const h = purple || isH(item);
+        let bgStr = posterBg(item);
+        let bgAttrs = getLazyBgAttrs('scard-poster', bgStr);
+        if (eager && bgAttrs.includes('lazy-bg')) {
+            // Force eager
+            bgAttrs = `class="scard-poster loaded" style="background: ${bgStr} !important; animation: none !important;"`;
+        }
         return `<div class="scard${h ? ' scard-h' : ''}" data-id="${item.id}" style="animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; animation-delay: ${index * 0.08}s; opacity: 0;">
-    <div class="scard-poster lazy-bg" data-bg="${posterBg(item)}">
+    <div ${bgAttrs}>
       <div class="scard-status ${getStatusClass(item.status)}">${item.status}</div>
       ${h ? '<span class="h-badge">18+</span>' : ''}
     </div>
@@ -853,7 +892,7 @@
             meta.textContent = '';
         } else {
             empty.style.display = 'none';
-            grid.innerHTML = results.map((d, i) => searchCardHTML(d, false, i)).join('');
+            grid.innerHTML = results.map((d, i) => searchCardHTML(d, false, i, !!q)).join('');
             meta.textContent = `${results.length} resultado${results.length !== 1 ? 's' : ''}${q ? ' para "' + q + '"' : ''}`;
         }
     }
@@ -873,7 +912,7 @@
             // Combine entrance and shimmer. Entrance must finish to reach opacity 1.
             const animations = `slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards, shimmer 1.5s infinite linear`;
             return `
-                <div class="cat-card lazy-bg" data-cat="${cat}" data-bg="${bgString}" style="${extraStyle} animation: ${animations}; animation-delay: ${staggerDelay}s, 0s; opacity: 0;">
+                <div ${getLazyBgAttrs('cat-card', bgString)} data-cat="${cat}" style="${extraStyle} animation: ${animations}; animation-delay: ${staggerDelay}s, 0s; opacity: 0;">
                     <div class="cat-card-icon" style="color:${accent}; border-color:${accent}44; background: ${accent}11; backdrop-filter: blur(10px);">${icon}</div>
                     <div class="cat-card-info">
                         <h3>${cat}</h3>
@@ -1000,6 +1039,22 @@
         const pill = $('h-toggle-pill');
         if (pill) pill.classList.toggle('active', hCatEnabled);
 
+        // Inicializar toggle Visto Automático
+        const awPill = $('cfg-autowatched-pill');
+        if (awPill) awPill.classList.toggle('active', localStorage.getItem('auto_watched') === '1');
+
+        // Inicializar selector de idioma preferido — predefinido "Latino" si no hay preferencia
+        const langSel = $('preferred-lang-select');
+        if (langSel) {
+            const saved = localStorage.getItem('preferred_lang');
+            if (!saved) {
+                localStorage.setItem('preferred_lang', 'Latino');
+                langSel.value = 'Latino';
+            } else {
+                langSel.value = saved;
+            }
+        }
+
         const versionEl = $('profile-version');
         if (versionEl) versionEl.textContent = CFG.version || '1.0.0';
         // Botón solicitar contenido
@@ -1072,8 +1127,8 @@
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
       </button>
     </div>
-    <div class="detail-img lazy-bg" data-bg="${backdropBg(item)}">
-      <div class="detail-poster lazy-bg" data-bg="${posterBg(item)}"></div>
+    <div ${getLazyBgAttrs('detail-img', backdropBg(item))}>
+      <div ${getLazyBgAttrs('detail-poster', posterBg(item))}></div>
       <button class="detail-fav-btn${fav ? ' active' : ''}" id="detail-fav-btn" aria-label="Favorito">
         <svg width="26" height="26" viewBox="0 0 24 24" fill="${fav ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
       </button>
@@ -1833,6 +1888,24 @@
             hToggle.addEventListener('click', () => {
                 hCatEnabled = !hCatEnabled;
                 applyHToggle();
+            });
+        }
+
+        const autoWatchToggle = document.getElementById('cfg-autowatched-row');
+        if (autoWatchToggle) {
+            autoWatchToggle.addEventListener('click', () => {
+                const current = localStorage.getItem('auto_watched') || '0';
+                const next = current === '0' ? '1' : '0';
+                localStorage.setItem('auto_watched', next);
+                const pill = document.getElementById('cfg-autowatched-pill');
+                if (pill) pill.classList.toggle('active', next === '1');
+            });
+        }
+
+        const langSelect = document.getElementById('preferred-lang-select');
+        if (langSelect) {
+            langSelect.addEventListener('change', (e) => {
+                localStorage.setItem('preferred_lang', e.target.value);
             });
         }
 
