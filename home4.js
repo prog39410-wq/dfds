@@ -148,7 +148,7 @@
                 }
                 el.style.backgroundRepeat = 'no-repeat';
                 
-                // Remove shimmer animation while keeping entrance animation (like slideUpFade)
+                // Remove shimmer animation while keeping entrance animation (like revealIn)
                 const currentAnim = el.style.animation || '';
                 if (currentAnim.includes('shimmer')) {
                     el.style.animation = currentAnim.split(',').filter(a => !a.includes('shimmer')).join(',').trim() || 'none';
@@ -696,7 +696,7 @@
             const badgeText = isAutoPlay ? 'DESTACADO' : (layout === 'vertical' ? 'EN EMISIÓN' : 'TENDENCIA');
             
             const staggerDelay = index * 0.08;
-            div.innerHTML = `<div class="slider-poster" style="animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; animation-delay: ${staggerDelay}s; opacity: 0;">
+            div.innerHTML = `<div class="slider-poster" style="animation: revealIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; animation-delay: ${staggerDelay}s; opacity: 0;">
                 <div ${getLazyBgAttrs('slider-poster-bg', bg)}></div>
                 <div class="slider-poster-overlay"></div>
                 <div class="slider-poster-badge">${badgeText}</div>
@@ -803,7 +803,7 @@
 
         track.innerHTML = classics.map((item, i) => `
             <div class="slider-card" data-id="${item.id}">
-                <div class="slider-poster" style="animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; animation-delay: ${i * 0.08}s; opacity: 0;">
+                <div class="slider-poster" style="animation: revealIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; animation-delay: ${i * 0.06}s; opacity: 0;">
                     <div ${getLazyBgAttrs('slider-poster-bg', posterBg(item))}></div>
                     <div class="slider-poster-overlay" style="background:linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 60%)"></div>
                     <span class="slider-poster-eps" style="background:var(--accent);color:#000;font-weight:900;border-radius:6px;padding:2px 6px">${item.date ? item.date.substring(0, 4) : 'OLD'}</span>
@@ -817,7 +817,7 @@
 
     function recentCardHTML(item, num, index = 0) {
         const h = isH(item);
-        return `<div class="recent-card${h ? ' recent-card-h' : ''}" data-id="${item.id}" style="animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; animation-delay: ${index * 0.08}s; opacity: 0;">
+        return `<div class="recent-card${h ? ' recent-card-h' : ''}" data-id="${item.id}" style="animation: revealIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; animation-delay: ${index * 0.06}s; opacity: 0;">
     <div class="recent-poster">
       <div ${getLazyBgAttrs('recent-poster-img', posterBg(item))}></div>
       <div class="recent-poster-num">#${num}</div>
@@ -849,15 +849,36 @@
 
 
 
-    function searchCardHTML(item, purple = false, index = 0, eager = false) {
+    function renderInChunks(items, container, rendererFunc, chunkSize = 12) {
+        if (!container) return;
+        container.innerHTML = '';
+        if (!items || items.length === 0) return;
+
+        let pos = 0;
+        function renderNextChunk() {
+            const chunk = items.slice(pos, pos + chunkSize);
+            // Pass overall index to renderer for correct staggered animations
+            const html = chunk.map((item, i) => rendererFunc(item, pos + i)).join('');
+            container.insertAdjacentHTML('beforeend', html);
+            pos += chunkSize;
+            if (pos < items.length) {
+                // Use a small timeout to let the UI breathe between chunks
+                setTimeout(() => requestAnimationFrame(renderNextChunk), 10);
+            }
+        }
+        renderNextChunk();
+    }
+
+    function searchCardHTML(item, index = 0, purple = false, eager = false) {
         const h = purple || isH(item);
         let bgStr = posterBg(item);
         let bgAttrs = getLazyBgAttrs('scard-poster', bgStr);
         if (eager && bgAttrs.includes('lazy-bg')) {
-            // Force eager
             bgAttrs = `class="scard-poster loaded" style="background: ${bgStr} !important; animation: none !important;"`;
         }
-        return `<div class="scard${h ? ' scard-h' : ''}" data-id="${item.id}" style="animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; animation-delay: ${index * 0.08}s; opacity: 0;">
+        // Cap stagger delay at 15 items for better performance
+        const delay = Math.min(index, 15) * 0.04;
+        return `<div class="scard${h ? ' scard-h' : ''}" data-id="${item.id}" style="animation: revealIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; animation-delay: ${delay}s; opacity: 0;">
     <div ${bgAttrs}>
       <div class="scard-status ${getStatusClass(item.status)}">${item.status}</div>
       ${h ? '<span class="h-badge">18+</span>' : ''}
@@ -895,28 +916,44 @@
             meta.textContent = '';
         } else {
             empty.style.display = 'none';
-            grid.innerHTML = results.map((d, i) => searchCardHTML(d, false, i, !!q)).join('');
+            renderInChunks(results, grid, (d, i) => searchCardHTML(d, i, false, !!q));
             meta.textContent = `${results.length} resultado${results.length !== 1 ? 's' : ''}${q ? ' para "' + q + '"' : ''}`;
         }
     }
 
+    let lastRenderedHState = null;
     function renderCategories() {
         const catGrid = $('cat-grid');
         if (!catGrid) return;
+
+        // Static optimization: skip if already rendered and H-state hasn't changed
+        if (catGrid.children.length > 0 && lastRenderedHState === hCatEnabled) return;
+        lastRenderedHState = hCatEnabled;
+
+        // OPTIMIZATION: One-pass count calculation
+        const data = visibleDATA();
+        const counts = {};
+        data.forEach(item => {
+            if (!item.category) return;
+            const itemCats = item.category.split(/,\s*/);
+            itemCats.forEach(c => {
+                const trimmed = c.trim();
+                counts[trimmed] = (counts[trimmed] || 0) + 1;
+            });
+        });
+
         const visibleCats = hCatEnabled ? [...CATEGORIES, 'H'] : CATEGORIES;
         catGrid.innerHTML = visibleCats.map((cat, index) => {
-            const count = visibleDATA().filter(d => d.category && d.category.split(/,\s*/).map(c => c.trim()).includes(cat)).length;
+            const count = counts[cat] || 0;
             const cfg = (window.CATEGORIES_CONFIG || []).find(x => x.name.toLowerCase().replace(':', '') === cat.toLowerCase().replace(':', '')) || { name: cat };
-            const bgString = cfg.backdrop ? `url('${cfg.backdrop}')` : '#1a1a1a';
-            const extraStyle = 'background-size: 100% 100% !important; background-position: center !important;';
             const icon = cfg.icon || '';
             const accent = cfg.accent || 'var(--accent)';
-            const staggerDelay = index * 0.08; // 80ms offset per card
-            // Combine entrance and shimmer. Entrance must finish to reach opacity 1.
-            const animations = `slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards, shimmer 1.5s infinite linear`;
+            const staggerDelay = Math.min(index, 15) * 0.04;
+            const animations = `revealIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards, shimmer 1.5s infinite linear`;
+
             return `
                 <div class="cat-card" data-cat="${cat}" style="animation: ${animations}; animation-delay: ${staggerDelay}s, 0s; opacity: 0;">
-                    <img class="cat-card-bg" src="${cfg.backdrop || ''}" alt="" style="display: ${cfg.backdrop ? 'block' : 'none'};">
+                    <img class="cat-card-bg" src="${cfg.backdrop || ''}" alt="" loading="lazy" style="display: ${cfg.backdrop ? 'block' : 'none'};">
                     <div class="cat-card-icon" style="color:${accent}; border-color:${accent}44; background: ${accent}11; backdrop-filter: blur(10px);">${icon}</div>
                     <div class="cat-card-info">
                         <h3>${cat}</h3>
@@ -938,7 +975,7 @@
         <small style="color:var(--text3);font-size:13px">No hay series en esta categoría todavía</small>
       </div>`;
         } else {
-            $('cat-library-grid').innerHTML = items.map((d, i) => searchCardHTML(d, cat === 'H', i)).join('');
+            renderInChunks(items, $('cat-library-grid'), (d, i) => searchCardHTML(d, i, cat === 'H'));
         }
     }
 
@@ -965,14 +1002,14 @@
         const countEl = $('all-library-count');
         if (countEl) countEl.textContent = `${items.length} títulos`;
         
-        grid.innerHTML = sorted.map((d, i) => searchCardHTML(d, false, i)).join('');
+        renderInChunks(sorted, grid, (d, i) => searchCardHTML(d, i, false));
     }
 
     function myListCardHTML(item, index = 0) {
         const ws = getWatchStatus(item.id);
         const fav = isFav(item.id);
         const h = isH(item);
-        return `<div class="scard${h ? ' scard-h' : ''}" data-id="${item.id}" style="animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; animation-delay: ${index * 0.08}s; opacity: 0;">
+        return `<div class="scard${h ? ' scard-h' : ''}" data-id="${item.id}" style="animation: revealIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; animation-delay: ${index * 0.04}s; opacity: 0;">
     <div class="scard-poster lazy-bg" data-bg="${posterBg(item)}">
       <div class="scard-status ${getStatusClass(item.status)}">${item.status}</div>
       ${h ? '<span class="h-badge">18+</span>' : ''}
@@ -1321,13 +1358,10 @@
         if (!next || (state.view === view && next.classList.contains('active'))) return;
 
         if (current) {
-            if (back) {
-                current.classList.remove('active');
-                current.classList.add('slide-left');
-                setTimeout(() => { current.classList.remove('slide-left'); }, 300);
-            } else {
-                current.classList.remove('active');
-            }
+            current.classList.remove('active');
+            current.classList.add('slide-left');
+            // decisive clear after transition
+            setTimeout(() => { current.classList.remove('slide-left'); }, 350);
         }
 
         state.prev = state.view;
