@@ -140,9 +140,12 @@
             const img = new Image();
             const applyBg = () => {
                 el.style.backgroundImage = `url('${match[1]}')`;
-                // Always force cover/center for premium components that might lack it in shorthand
-                el.style.backgroundSize = bgStr.includes('cover') ? 'cover' : 'cover';
-                el.style.backgroundPosition = bgStr.includes('center') ? 'center' : 'center';
+                // Logic for scaling and positioning moved to home.css (.lazy-bg.loaded)
+                // But we force 100% 100% for cat-card to avoid zoom as per user request
+                if (el.classList.contains('cat-card')) {
+                    el.style.setProperty('background-size', '100% 100%', 'important');
+                    el.style.setProperty('background-position', 'center', 'important');
+                }
                 el.style.backgroundRepeat = 'no-repeat';
                 
                 // Remove shimmer animation while keeping entrance animation (like slideUpFade)
@@ -905,14 +908,15 @@
             const count = visibleDATA().filter(d => d.category && d.category.split(/,\s*/).map(c => c.trim()).includes(cat)).length;
             const cfg = (window.CATEGORIES_CONFIG || []).find(x => x.name.toLowerCase().replace(':', '') === cat.toLowerCase().replace(':', '')) || { name: cat };
             const bgString = cfg.backdrop ? `url('${cfg.backdrop}')` : '#1a1a1a';
-            const extraStyle = cfg.backdrop ? 'background-size: cover !important;' : '';
+            const extraStyle = 'background-size: 100% 100% !important; background-position: center !important;';
             const icon = cfg.icon || '';
             const accent = cfg.accent || 'var(--accent)';
             const staggerDelay = index * 0.08; // 80ms offset per card
             // Combine entrance and shimmer. Entrance must finish to reach opacity 1.
             const animations = `slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards, shimmer 1.5s infinite linear`;
             return `
-                <div ${getLazyBgAttrs('cat-card', bgString)} data-cat="${cat}" style="${extraStyle} animation: ${animations}; animation-delay: ${staggerDelay}s, 0s; opacity: 0;">
+                <div class="cat-card" data-cat="${cat}" style="animation: ${animations}; animation-delay: ${staggerDelay}s, 0s; opacity: 0;">
+                    <img class="cat-card-bg" src="${cfg.backdrop || ''}" alt="" style="display: ${cfg.backdrop ? 'block' : 'none'};">
                     <div class="cat-card-icon" style="color:${accent}; border-color:${accent}44; background: ${accent}11; backdrop-filter: blur(10px);">${icon}</div>
                     <div class="cat-card-info">
                         <h3>${cat}</h3>
@@ -1961,19 +1965,19 @@
                 const card = e.target.closest('.cat-card');
                 if (card) {
                     const cat = card.dataset.cat;
-                    navigateTo('cat-library', { cat });
+                    navigateTo("cat-library", { cat });
                 }
             });
         }
 
         // Sidebar Help -> Tutorial Sub-view
-        const helpBtn = $('help-backup-btn');
-        if (helpBtn) helpBtn.addEventListener('click', () => navigateTo('settings-help'));
+        const helpBtn = $("help-backup-btn");
+        if (helpBtn) helpBtn.addEventListener("click", () => navigateTo("settings-help"));
 
         // Cerrar modales al hacer clic fuera
-        ['backup-text-overlay', 'restore-text-overlay', 'h-confirm-overlay'].forEach(id => {
+        ["backup-text-overlay", "restore-text-overlay", "h-confirm-overlay"].forEach(id => {
             const o = $(id);
-            if (o) o.addEventListener('click', e => { if (e.target === o) closeModal(id); });
+            if (o) o.addEventListener("click", e => { if (e.target === o) closeModal(id); });
         });
 
         // Garantizar carga perezosa inicial
