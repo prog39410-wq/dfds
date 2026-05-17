@@ -62,16 +62,24 @@ body {
     100% { background-position: 200% 0; }
 }
 
-/* Staggered Entry Animation */
-@keyframes slideUpFade {
+/* Premium Card Reveal Animation */
+@keyframes revealIn {
     0% {
         opacity: 0;
-        transform: translateY(20px);
+        transform: translateY(16px) scale(0.96);
+        filter: blur(4px);
     }
     100% {
         opacity: 1;
-        transform: translateY(0);
+        transform: translateY(0) scale(1);
+        filter: blur(0);
     }
+}
+
+/* Legacy support or alias if needed, but we'll transition to revealIn */
+@keyframes slideUpFade {
+    0% { opacity: 0; transform: translateY(20px); }
+    100% { opacity: 1; transform: translateY(0); }
 }
 /* --------------------------- */
 
@@ -148,22 +156,26 @@ body {
     overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
     opacity: 0;
-    transform: translateX(100%);
-    transition: transform var(--transition), opacity var(--transition);
+    background: var(--bg);
+    transform: scale(0.98);
+    transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1);
     will-change: transform, opacity;
     pointer-events: none;
-    padding-bottom: 16px
+    padding-bottom: 16px;
+    z-index: 1;
 }
 
 .view.active {
     opacity: 1;
-    transform: translateX(0);
-    pointer-events: auto
+    transform: scale(1);
+    pointer-events: auto;
+    z-index: 5;
 }
 
 .view.slide-left {
-    transform: translateX(-30%);
-    opacity: 0
+    transform: scale(1.05);
+    opacity: 0;
+    z-index: 1;
 }
 
 .hero {
