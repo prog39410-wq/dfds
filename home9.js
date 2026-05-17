@@ -4,6 +4,16 @@
     const DATA = window.DATA || [];
     const CFG = window.CONFIG || {};
 
+    // Construir caché de búsqueda para optimizar rendimiento de "Explorar"
+    function buildSearchCache() {
+        if (window._searchCacheBuilt) return;
+        DATA.forEach(d => {
+            const tagsText = Array.isArray(d.tags) ? d.tags.join(' ') : (d.tags || '');
+            d._searchText = `${d.title || ''} ${d.description || ''} ${tagsText} ${d.category || ''}`.toLowerCase();
+        });
+        window._searchCacheBuilt = true;
+    }
+
     // Aplicar configuración
     (function applyConfig() {
         const name = CFG.appName || 'ANiGo';
@@ -87,6 +97,7 @@
         const memberLabel = document.getElementById('profile-member-label');
         if (memberLabel) memberLabel.textContent = `Miembro de ${name}`;
     })();
+
     const FAVS_KEY = 'favorites_v1';
     const WATCH_STATUS_KEY = 'watch_status_v1';
     let favs = JSON.parse(localStorage.getItem(FAVS_KEY) || '[]');
@@ -122,7 +133,6 @@
         let match = (bgStr || '').match(/url\(['"]?([^'"\)]+)['"]?\)/);
         let key = match ? match[1] : bgStr;
         if (key && key !== 'undefined' && window.loadedImageCache.has(key)) {
-            // Evitar conflictos con animaciones shimmer eliminándolas al vuelo
             return `class="${classes} loaded" style="background: ${bgStr} !important; animation: none !important;"`;
         }
         return `class="${classes} lazy-bg" data-bg="${bgStr}"`;
@@ -141,15 +151,12 @@
             const img = new Image();
             const applyBg = () => {
                 el.style.backgroundImage = `url('${match[1]}')`;
-                // Logic for scaling and positioning moved to home.css (.lazy-bg.loaded)
-                // But we force 100% 100% for cat-card to avoid zoom as per user request
                 if (el.classList.contains('cat-card')) {
                     el.style.setProperty('background-size', '100% 100%', 'important');
                     el.style.setProperty('background-position', 'center', 'important');
                 }
                 el.style.backgroundRepeat = 'no-repeat';
                 
-                // Remove shimmer animation while keeping entrance animation (like revealIn)
                 const currentAnim = el.style.animation || '';
                 if (currentAnim.includes('shimmer')) {
                     el.style.animation = currentAnim.split(',').filter(a => !a.includes('shimmer')).join(',').trim() || 'none';
@@ -189,7 +196,6 @@
         const els = view.querySelectorAll('.lazy-bg:not(.loaded):not([data-loading])');
         let processed = 0;
         els.forEach(el => {
-            // Eagerly force the first 30 assets in an activated view, skipping unpredictable CSS translation bounds
             if (processed < 30) {
                 forceLoadImage(el);
                 processed++;
@@ -215,8 +221,6 @@
         else delete watchStatus[id];
         saveWatchStatus();
     };
-
-
 
     // ── Historial de búsqueda ──────────────────────────────────
     const SEARCH_HISTORY_KEY = 'search_history_v1';
@@ -352,7 +356,6 @@
     };
     const isFav = id => favs.includes(id);
 
-
     function showToast(msg, iconHTML = '') {
         const toast = $('toast');
         if (!toast) return;
@@ -457,7 +460,6 @@
                 searchHistory: searchHistory,
                 settings: {
                     hCatEnabled: hCatEnabled,
-
                 },
                 exportDate: new Date().toISOString(),
                 app: 'WolfAnime'
@@ -498,7 +500,6 @@
                         if (data.settings.hCatEnabled !== undefined) {
                             localStorage.setItem('h_enabled', data.settings.hCatEnabled ? '1' : '0');
                         }
-
                     }
                     if (data.searchHistory) {
                         searchHistory = data.searchHistory;
@@ -514,6 +515,7 @@
         };
         input.click();
     }
+    
     const toggleFav = id => {
         favs = isFav(id) ? favs.filter(f => f !== id) : [...favs, id];
         saveFavs();
@@ -533,7 +535,6 @@
         const url = new URL(window.location.href);
         const params = new URLSearchParams();
 
-        // Preserve some persistent state if needed, or just clear and set new ones
         Object.entries(newParams).forEach(([k, v]) => {
             if (v !== null && v !== undefined && v !== '') params.set(k, v);
         });
@@ -541,7 +542,6 @@
         const newUrl = params.toString() ? `${url.pathname}?${params.toString()}` : url.pathname;
         window.history.replaceState({}, '', newUrl);
 
-        // Save to localStorage too
         localStorage.setItem(APP_STATE_KEY, JSON.stringify(newParams));
     }
 
@@ -549,7 +549,6 @@
         let p = getURLParams();
         const hasRelevantParams = p.id || p.cat || p.q || p.view;
 
-        // If no relevant URL params, try localStorage
         if (!hasRelevantParams) {
             const saved = localStorage.getItem(APP_STATE_KEY);
             if (saved) {
@@ -591,7 +590,6 @@
 
     let hCatEnabled = localStorage.getItem('h_enabled') === '1';
 
-
     const isH = item => {
         if (!item || !item.category) return false;
         return item.category.split(/,\s*/).map(c => c.trim()).includes('H');
@@ -601,6 +599,7 @@
         const cats = d.category ? d.category.split(/,\s*/).map(c => c.trim()) : [];
         return !cats.includes('H');
     });
+    
     const saveHEnabled = () => localStorage.setItem('h_enabled', hCatEnabled ? '1' : '0');
 
     function formatAdded(d) {
@@ -617,7 +616,6 @@
         return 'status-off';
     }
 
-    // Helpers para imágenes: usan poster/backdrop si existen, sino el gradiente image
     function posterBg(item) {
         if (item.poster) return `url('${item.poster}') center/cover no-repeat`;
         if (item.image && (item.image.startsWith('http') || item.image.startsWith('//'))) {
@@ -625,6 +623,7 @@
         }
         return item.image || 'var(--card-bg)';
     }
+    
     function backdropBg(item) {
         const url = item.backdrop || item.poster || item.image;
         if (url && (url.startsWith('http') || url.startsWith('//'))) {
@@ -708,7 +707,6 @@
             const badgeText = isAutoPlay ? 'DESTACADO' : (layout === 'vertical' ? 'EN EMISIÓN' : 'TENDENCIA');
             const badgeClass = isAutoPlay ? 'badge-featured' : (layout === 'vertical' ? 'badge-airing' : 'badge-trending');
             
-            const staggerDelay = index * 0.08;
             div.innerHTML = `<div class="slider-poster">
                 <div ${getLazyBgAttrs('slider-poster-bg', bg)}></div>
                 <div class="slider-poster-overlay"></div>
@@ -799,35 +797,6 @@
         }
     }
 
-    function renderClassics() {
-        const track = $('classics-track');
-        if (!track) return;
-        const classics = visibleDATA().filter(d => {
-            if (!d.date) return false;
-            const year = parseInt(d.date.substring(0, 4));
-            return year <= 2010;
-        }).sort((a, b) => b.date.localeCompare(a.date));
-
-        if (classics.length === 0) {
-            track.closest('.section-header')?.style.setProperty('display', 'none');
-            track.closest('.featured-slider')?.style.setProperty('display', 'none');
-            return;
-        }
-
-        track.innerHTML = classics.map((item, i) => `
-            <div class="slider-card" data-id="${item.id}">
-                <div class="slider-poster" style="animation: revealIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; animation-delay: ${i * 0.05}s; opacity: 0;">
-                    <div ${getLazyBgAttrs('slider-poster-bg', posterBg(item))}></div>
-                    <div class="slider-poster-overlay" style="background:linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 60%)"></div>
-                    <span class="slider-poster-eps" style="background:var(--accent);color:#000;font-weight:900;border-radius:6px;padding:2px 6px">${item.date ? item.date.substring(0, 4) : 'OLD'}</span>
-                    <div class="slider-poster-info" style="padding:10px">
-                        <div class="slider-poster-title" style="font-size:13px;line-height:1.2;font-weight:700">${item.title}</div>
-                    </div>
-                </div>
-            </div>
-        `).join('');
-    }
-
     function recentCardHTML(item, num, index = 0) {
         const h = isH(item);
         return `<div class="recent-card${h ? ' recent-card-h' : ''}" data-id="${item.id}" style="animation: revealIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; animation-delay: ${index * 0.05}s; opacity: 0;">
@@ -860,23 +829,47 @@
         container.innerHTML = favItems.map(d => cardHTML(d, true)).join('');
     }
 
-
-
-    function renderInChunks(items, container, rendererFunc, chunkSize = 12) {
+    // SCROLL INFINITO MEJORADO PARA RENDERINCHUNKS
+    let _chunkObserver = null;
+    function renderInChunks(items, container, rendererFunc, chunkSize = 24) {
         if (!container) return;
         container.innerHTML = '';
+        if (_chunkObserver) {
+            _chunkObserver.disconnect();
+            _chunkObserver = null;
+        }
         if (!items || items.length === 0) return;
 
         let pos = 0;
         function renderNextChunk() {
             const chunk = items.slice(pos, pos + chunkSize);
-            // Pass overall index to renderer for correct staggered animations
+            if (chunk.length === 0) return;
+            
+            // Render HTML
             const html = chunk.map((item, i) => rendererFunc(item, pos + i)).join('');
             container.insertAdjacentHTML('beforeend', html);
             pos += chunkSize;
+
+            // Trigger eager load on visible new elements
+            setTimeout(observeImages, 10);
+
+            // Set up IntersectionObserver to load the next chunk when scrolled near bottom
             if (pos < items.length) {
-                // Use a small timeout to let the UI breathe between chunks
-                setTimeout(() => requestAnimationFrame(renderNextChunk), 10);
+                const sentinel = document.createElement('div');
+                sentinel.className = 'scroll-sentinel';
+                sentinel.style.height = '1px';
+                sentinel.style.width = '100%';
+                sentinel.style.gridColumn = '1 / -1'; // Ensure it spans the whole grid
+                container.appendChild(sentinel);
+
+                _chunkObserver = new IntersectionObserver((entries) => {
+                    if (entries[0].isIntersecting) {
+                        _chunkObserver.disconnect();
+                        sentinel.remove();
+                        requestAnimationFrame(renderNextChunk);
+                    }
+                }, { rootMargin: '400px' }); // Load early 
+                _chunkObserver.observe(sentinel);
             }
         }
         renderNextChunk();
@@ -889,9 +882,9 @@
         if (eager && bgAttrs.includes('lazy-bg')) {
             bgAttrs = `class="scard-poster loaded" style="background: ${bgStr} !important; animation: none !important;"`;
         }
-        // Cap stagger delay at 15 items for better performance
-        const delay = Math.min(index, 15) * 0.04;
-        return `<div class="scard${h ? ' scard-h' : ''}" data-id="${item.id}" style="animation: revealIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; animation-delay: ${index * 0.04}s; opacity: 0;">
+        // Cap stagger delay heavily to prevent massive lag
+        const delay = (index % 24) * 0.04; 
+        return `<div class="scard${h ? ' scard-h' : ''}" data-id="${item.id}" style="animation: revealIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; animation-delay: ${delay}s; opacity: 0;">
     <div ${bgAttrs}>
       <div class="scard-status ${getStatusClass(item.status)}">${item.status}</div>
       ${h ? '<span class="h-badge">18+</span>' : ''}
@@ -916,13 +909,9 @@
         const lower = trimmedQ.toLowerCase();
         let results = visibleDATA();
         
+        // Uso la caché pre-computada de búsqueda (muy rápido)
         if (trimmedQ) {
-            results = results.filter(d =>
-                d.title.toLowerCase().includes(lower) ||
-                d.description.toLowerCase().includes(lower) ||
-                d.tags.some(t => t.toLowerCase().includes(lower)) ||
-                d.category.toLowerCase().includes(lower)
-            );
+            results = results.filter(d => (d._searchText || '').includes(lower));
         }
 
         if (cat && trimmedQ) results = results.filter(d => {
@@ -946,11 +935,9 @@
         const catGrid = $('cat-grid');
         if (!catGrid) return;
 
-        // Static optimization: skip if already rendered and H-state hasn't changed
         if (catGrid.children.length > 0 && lastRenderedHState === hCatEnabled) return;
         lastRenderedHState = hCatEnabled;
 
-        // OPTIMIZATION: One-pass count calculation
         const data = visibleDATA();
         const counts = {};
         data.forEach(item => {
@@ -1028,8 +1015,13 @@
         const ws = getWatchStatus(item.id);
         const fav = isFav(item.id);
         const h = isH(item);
-        return `<div class="scard${h ? ' scard-h' : ''}" data-id="${item.id}" style="animation: revealIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; animation-delay: ${index * 0.04}s; opacity: 0;">
-    <div class="scard-poster lazy-bg" data-bg="${posterBg(item)}">
+        const delay = (index % 24) * 0.04;
+        
+        // SIN LAZY LOADING: Inyectamos el estilo inline directamente
+        const bgStyle = `background: ${posterBg(item)} !important; background-size: cover !important; background-position: center !important;`;
+        
+        return `<div class="scard${h ? ' scard-h' : ''}" data-id="${item.id}" style="animation: revealIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; animation-delay: ${delay}s; opacity: 0;">
+    <div class="scard-poster loaded" style="${bgStyle}">
       <div class="scard-status ${getStatusClass(item.status)}">${item.status}</div>
       ${h ? '<span class="h-badge">18+</span>' : ''}
     </div>
@@ -1057,7 +1049,6 @@
         const empty = $('fav-empty');
         const countEl = $('mylist-count');
 
-        // Un item aparece en Mi Lista si tiene favorito O tiene estado de seguimiento
         let items = visibleDATA().filter(d => isFav(d.id) || getWatchStatus(d.id));
 
         const filter = state.favFilter;
@@ -1074,6 +1065,7 @@
             empty.style.display = 'flex';
         } else {
             empty.style.display = 'none';
+            // Usa el nuevo renderizado directo (sin lazy loading)
             grid.innerHTML = items.map((d, i) => myListCardHTML(d, i)).join('');
         }
     }
@@ -1083,7 +1075,6 @@
         const badge = $('fav-badge-profile');
         if (badge) badge.textContent = favCount;
 
-        // Contar categorías visibles (incluir H solo si está habilitado)
         const visibleCategories = hCatEnabled
             ? CATS_CFG.map(c => c.name)
             : CATS_CFG.filter(c => !c.isH).map(c => c.name);
@@ -1099,7 +1090,6 @@
         const pill = $('h-toggle-pill');
         if (pill) pill.classList.toggle('active', hCatEnabled);
 
-        // Inicializar toggle Visto Automático (activo por defecto)
         const awPill = $('cfg-autowatched-pill');
         if (awPill) {
             const savedAW = localStorage.getItem('auto_watched');
@@ -1111,7 +1101,6 @@
             }
         }
 
-        // Inicializar selector de idioma preferido — predefinido "Latino" si no hay preferencia
         const langSel = $('preferred-lang-select');
         if (langSel) {
             const saved = localStorage.getItem('preferred_lang');
@@ -1125,7 +1114,7 @@
 
         const versionEl = $('profile-version');
         if (versionEl) versionEl.textContent = CFG.version || '1.0.0';
-        // Botón solicitar contenido
+        
         const reqBtn = $('request-content-btn');
         const reqGrp = $('request-content-group');
         if (reqBtn) {
@@ -1256,7 +1245,6 @@
             <span>Géneros</span>
             <div class="detail-genres-tags">
               ${(() => {
-                // Separar el campo genre por diferentes separadores posibles
                 let genres = [];
                 if (item.genre.includes(' / ')) {
                     genres = item.genre.split(' / ').map(g => g.trim());
@@ -1265,7 +1253,6 @@
                 } else if (item.genre.includes(',')) {
                     genres = item.genre.split(',').map(g => g.trim());
                 } else {
-                    // Si no hay separador, es un solo género
                     genres = [item.genre];
                 }
 
@@ -1313,7 +1300,6 @@
             openMyListModal(item.id);
         });
 
-        // Event listeners para botones "Ver más" de tags y géneros
         const showTagsBtn = $('detail-inner').querySelector('[data-show-tags]');
         if (showTagsBtn) {
             showTagsBtn.addEventListener('click', (e) => {
@@ -1324,7 +1310,6 @@
                 const isExpanded = btn.dataset.expanded === 'true';
 
                 if (isExpanded) {
-                    // Colapsar: ocultar tags después del máximo
                     allTags.forEach((tag, index) => {
                         if (index >= maxVisible) {
                             tag.classList.add('tag-hidden');
@@ -1333,7 +1318,6 @@
                     btn.textContent = `Ver más (${allTags.length - maxVisible})`;
                     btn.dataset.expanded = 'false';
                 } else {
-                    // Expandir: mostrar todos los tags
                     allTags.forEach(tag => tag.classList.remove('tag-hidden'));
                     btn.textContent = 'Ver menos';
                     btn.dataset.expanded = 'true';
@@ -1351,7 +1335,6 @@
                 const isExpanded = btn.dataset.expanded === 'true';
 
                 if (isExpanded) {
-                    // Colapsar: ocultar géneros después del máximo
                     allTags.forEach((tag, index) => {
                         if (index >= maxVisible) {
                             tag.classList.add('tag-hidden');
@@ -1360,7 +1343,6 @@
                     btn.textContent = `Ver más (${allTags.length - maxVisible})`;
                     btn.dataset.expanded = 'false';
                 } else {
-                    // Expandir: mostrar todos los géneros
                     allTags.forEach(tag => tag.classList.remove('tag-hidden'));
                     btn.textContent = 'Ver menos';
                     btn.dataset.expanded = 'true';
@@ -1387,7 +1369,6 @@
         if (current) {
             current.classList.remove('active');
             current.classList.add('slide-left');
-            // decisive clear after transition
             setTimeout(() => { current.classList.remove('slide-left'); }, 350);
         }
 
@@ -1435,11 +1416,9 @@
             if (pb) forceLoadImage(pb);
         }
 
-        // Bypass IntersectionObserver translation bugs via manual bounding rescue
         setTimeout(() => unstickImagesInView(document.getElementById(`view-${view}`)), 50);
         setTimeout(() => unstickImagesInView(document.getElementById(`view-${view}`)), 300);
 
-        // Update URL
         const params = { view: view };
         if (view === 'search' && $('search-input')?.value) params.q = $('search-input').value;
         if (view === 'cat-library') params.cat = state.catFilter;
@@ -1460,7 +1439,7 @@
 
     // ── Modal Mi Lista ──────────────────────────────────────────
     let modalItemId = null;
-    let modalPendingStatus = undefined; // undefined = sin cambio, null = quitar, string = nuevo estado
+    let modalPendingStatus = undefined; 
 
     function openMyListModal(id) {
         const item = DATA.find(d => d.id === id);
@@ -1490,7 +1469,6 @@
             btn.classList.toggle('active', active);
             radio.classList.toggle('checked', active);
         });
-        // Habilitar confirmar solo si hay un cambio respecto al estado guardado
         const saved = getWatchStatus(modalItemId);
         const confirmBtn = $('modal-confirm-btn');
         if (confirmBtn) {
@@ -1507,7 +1485,7 @@
         if (state.view === 'home') renderHome();
         if (state.view === 'search') renderSearch($('search-input').value, state.catFilter);
         renderProfile();
-        // Actualizar botón de Mi Lista en la vista de detalle si está abierta
+        
         if (state.view === 'detail' && state.detail) {
             const btn = document.getElementById('detail-mylist-btn');
             if (btn) {
@@ -1533,7 +1511,6 @@
         if (!opt || modalItemId === null) return;
         const key = opt.dataset.modalWs;
         const saved = getWatchStatus(modalItemId);
-        // Si ya está seleccionado (pendiente o guardado), deseleccionar
         const current = modalPendingStatus !== undefined ? modalPendingStatus : saved;
         modalPendingStatus = current === key ? null : key;
         updateModalChecks();
@@ -1544,12 +1521,10 @@
         setWatchStatus(modalItemId, modalPendingStatus || null);
         closeMyListModal();
     });
-    // ────────────────────────────────────────────────────────────
 
     function renderFilterChips() {
         const chips = $('filter-chips');
         const visibleCats = hCatEnabled ? [...CATEGORIES, 'H'] : CATEGORIES;
-        // Si el filtro activo era H y se desactivó, resetear
         if (!hCatEnabled && state.catFilter === 'H') state.catFilter = null;
         chips.innerHTML = `<div class="chip${!state.catFilter ? ' active' : ''}" data-chip="">Todos</div>` +
             visibleCats.map(c => {
@@ -1560,7 +1535,7 @@
             }).join('');
     }
 
-    // ── Modal Confirmar Eliminación (declaración adelantada) ──
+    // ── Modal Confirmar Eliminación ──
     let _removeTargetId = null;
     let _removeSelFav = false;
     let _removeSelWs = false;
@@ -1591,14 +1566,12 @@
         const tabNames = { fav: 'Favoritos', Viendo: 'Viendo', Completado: 'Completado', Pendiente: 'Pendiente' };
 
         if (filter !== 'all') {
-            // Tab específico: título directo, sin opciones
             if (title) title.textContent = `¿Eliminar de ${tabNames[filter] || filter}?`;
             if (options) options.style.display = 'none';
             if (acceptBtn) { acceptBtn.textContent = 'Eliminar'; acceptBtn.disabled = false; }
             _removeSelFav = filter === 'fav';
             _removeSelWs = filter !== 'fav';
         } else {
-            // Tab "Todos": opciones con checkboxes
             if (title) title.textContent = '¿Qué deseas eliminar?';
             if (options) options.style.display = '';
             if (optFav) optFav.style.display = hasFav ? '' : 'none';
@@ -1618,6 +1591,7 @@
         o.classList.add('open');
         o.setAttribute('aria-hidden', 'false');
     }
+    
     function closeRemoveConfirm() {
         const o = document.getElementById('remove-confirm-overlay');
         o.classList.remove('open');
@@ -1709,7 +1683,6 @@
             const newStatus = wsBtn.dataset.ws;
             const current = getWatchStatus(id);
             setWatchStatus(id, current === newStatus ? null : newStatus);
-            // Si ya no tiene ni fav ni estado, sale de Mi Lista — re-render
             renderFavorites();
             renderProfile();
             return;
@@ -1732,14 +1705,15 @@
             if (clear) clear.classList.add('visible');
             state.catFilter = null;
             renderSearch(q, null);
-            renderFilterChips(); // Update chips to show "Todos" active
+            renderFilterChips(); 
             navigateTo('search');
             return;
         }
     });
 
-
     function init() {
+        buildSearchCache(); // Construir caché de búsqueda
+        
         renderFilterChips();
         renderHome();
         renderSearch();
@@ -1748,7 +1722,6 @@
         renderProfile();
         renderSearchHistory();
 
-        // Default view if no params handle it
         if (!handleURLParams()) {
             navigateTo('home');
         }
@@ -1829,7 +1802,6 @@
             });
         }
 
-        // Modal eliminación individual
         const hSingleCancel = $('history-single-cancel');
         if (hSingleCancel) hSingleCancel.addEventListener('click', closeSingleHistoryDeleteModal);
 
@@ -1850,7 +1822,6 @@
             });
         }
 
-        // Toggle H desde perfil — con modal de confirmación
         function applyHToggle() {
             saveHEnabled();
             renderProfile();
@@ -1859,11 +1830,9 @@
             renderHome();
             renderSearch($('search-input').value, state.catFilter);
             renderFavorites();
-            // Si la vista actual es cat-library de H y se desactivó, volver a categorías
             if (!hCatEnabled && state.view === 'cat-library' && state.catFilter === 'H') {
                 navigateTo('categories', true);
             }
-            // Si la vista actual es all-library, refrescar
             if (state.view === 'all-library') renderAllLibrary();
         }
 
@@ -1905,13 +1874,11 @@
             }
         });
 
-        // ── Modal Confirmar Eliminación ──────────────────────────
         $('remove-confirm-cancel').addEventListener('click', closeRemoveConfirm);
         $('remove-confirm-overlay').addEventListener('click', e => {
             if (e.target === $('remove-confirm-overlay')) closeRemoveConfirm();
         });
 
-        // Checkboxes del modal de eliminación
         document.getElementById('remove-opt-fav').addEventListener('click', () => {
             _removeSelFav = !_removeSelFav;
             document.getElementById('remove-chk-fav').classList.toggle('checked', _removeSelFav);
@@ -1937,11 +1904,7 @@
             renderFavorites();
             renderProfile();
         });
-        // ────────────────────────────────────────────────────────
 
-
-
-        // Trigger secreto: 5 taps en el título "Explorar"
         let hTaps = 0, hTimer;
         const catTitle = document.getElementById('cat-page-title');
         if (catTitle) {
@@ -1957,20 +1920,10 @@
             });
         }
 
-        // Toggles en perfil
-        const hToggle = $('h-toggle-item');
-        if (hToggle) {
-            hToggle.addEventListener('click', () => {
-                hCatEnabled = !hCatEnabled;
-                applyHToggle();
-            });
-        }
-
         const autoWatchToggle = document.getElementById('cfg-autowatched-row');
         if (autoWatchToggle) {
             autoWatchToggle.addEventListener('click', () => {
                 const current = localStorage.getItem('auto_watched');
-                // Si es null, asumimos que estaba en '1' (por el default), así que el siguiente es '0'
                 const next = (current === null || current === '1') ? '0' : '1';
                 localStorage.setItem('auto_watched', next);
                 const pill = document.getElementById('cfg-autowatched-pill');
@@ -1985,8 +1938,6 @@
             });
         }
 
-
-        // Administración de datos
         const clearFavsBtn = $('clear-favs-btn');
         if (clearFavsBtn) clearFavsBtn.addEventListener('click', clearFavorites);
 
@@ -1999,15 +1950,11 @@
         const importDataBtn = $('import-data-btn');
         if (importDataBtn) importDataBtn.addEventListener('click', importUserData);
 
-        // Backup por texto
         const bkCreateBtn = $('backup-create-btn');
         if (bkCreateBtn) bkCreateBtn.addEventListener('click', generateTextBackup);
 
         const bkRestoreBtn = $('backup-restore-btn');
         if (bkRestoreBtn) bkRestoreBtn.addEventListener('click', () => openModal('restore-text-overlay'));
-
-        // Historial de búsqueda en ajustes
-
 
         const bkCloseBtn = $('backup-close-btn');
         if (bkCloseBtn) bkCloseBtn.addEventListener('click', () => closeModal('backup-text-overlay'));
@@ -2030,7 +1977,6 @@
         const rsSubmitBtn = $('restore-submit-btn');
         if (rsSubmitBtn) rsSubmitBtn.addEventListener('click', restoreFromTextBackup);
 
-        // Categorías - Click en cards
         const catGrid = $('cat-grid');
         if (catGrid) {
             catGrid.addEventListener('click', (e) => {
@@ -2042,17 +1988,14 @@
             });
         }
 
-        // Sidebar Help -> Tutorial Sub-view
         const helpBtn = $("help-backup-btn");
         if (helpBtn) helpBtn.addEventListener("click", () => navigateTo("settings-help"));
 
-        // Cerrar modales al hacer clic fuera
         ["backup-text-overlay", "restore-text-overlay", "h-confirm-overlay"].forEach(id => {
             const o = $(id);
             if (o) o.addEventListener("click", e => { if (e.target === o) closeModal(id); });
         });
 
-        // Garantizar carga perezosa inicial
         setTimeout(observeImages, 300);
     }
 
